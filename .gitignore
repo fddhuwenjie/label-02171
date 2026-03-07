@@ -1,0 +1,37 @@
+# IDE
+.idea/
+.vscode/
+*.iml
+.kiro/
+.cursor/
+
+# Java
+backend/target/
+*.class
+*.jar
+*.war
+*.log
+
+# Node
+frontend-admin/node_modules/
+frontend-admin/dist/
+frontend-admin/.env.local
+frontend-mp/node_modules/
+frontend-mp/dist/
+frontend-mp/.env.local
+frontend-user/node_modules/
+frontend-user/dist/
+frontend-user/.env.local
+
+# OS
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+
+# Docker
+docker-compose.override.yml
+
+# Env
+.env
+*.env.local

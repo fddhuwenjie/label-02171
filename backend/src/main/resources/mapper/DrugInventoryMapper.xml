@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.medcommunity.mapper.DrugInventoryMapper">
+
+    <select id="selectInventoryList" resultType="com.medcommunity.entity.DrugInventory">
+        SELECT di.id, di.drug_id, di.hospital_id, di.quantity, di.warning_threshold,
+               di.batch_no, di.expire_date, di.created_at, di.updated_at,
+               d.name AS drug_name, d.code AS drug_code, d.spec, d.unit,
+               h.name AS hospital_name
+        FROM drug_inventory di
+        LEFT JOIN drug_info d ON di.drug_id = d.id
+        LEFT JOIN hospital h ON di.hospital_id = h.id
+        <where>
+            <if test="drugId != null">AND di.drug_id = #{drugId}</if>
+            <if test="hospitalId != null">AND di.hospital_id = #{hospitalId}</if>
+            <if test="warningOnly != null and warningOnly">AND di.quantity &lt;= di.warning_threshold</if>
+        </where>
+        ORDER BY di.updated_at DESC
+    </select>
+
+</mapper>

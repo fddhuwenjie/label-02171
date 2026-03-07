@@ -1,0 +1,2 @@
+-- 为已有数据库添加 phone 列（若使用 docker 全新部署可忽略，新 schema 已包含此列）
+-- ALTER TABLE hospital ADD COLUMN phone VARCHAR(20) AFTER contact;

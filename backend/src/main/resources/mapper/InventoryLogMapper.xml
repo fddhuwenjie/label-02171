@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.medcommunity.mapper.InventoryLogMapper">
+
+    <select id="selectLogList" resultType="com.medcommunity.entity.InventoryLog">
+        SELECT il.id, il.drug_id, il.hospital_id, il.type, il.quantity, il.batch_no,
+               il.operator, il.remark, il.created_at,
+               d.name AS drug_name, h.name AS hospital_name
+        FROM inventory_log il
+        LEFT JOIN drug_info d ON il.drug_id = d.id
+        LEFT JOIN hospital h ON il.hospital_id = h.id
+        <where>
+            <if test="drugId != null">AND il.drug_id = #{drugId}</if>
+            <if test="hospitalId != null">AND il.hospital_id = #{hospitalId}</if>
+            <if test="type != null and type != ''">AND il.type = #{type}</if>
+        </where>
+        ORDER BY il.created_at DESC
+    </select>
+
+</mapper>

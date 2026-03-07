@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.medcommunity.mapper.DrugTransferMapper">
+
+    <select id="selectTransferList" resultType="com.medcommunity.entity.DrugTransfer">
+        SELECT dt.id, dt.transfer_no, dt.from_hospital_id, dt.to_hospital_id, dt.status,
+               dt.remark, dt.created_by, dt.created_at, dt.updated_at,
+               h1.name AS from_hospital_name, h2.name AS to_hospital_name, u.real_name AS created_by_name
+        FROM drug_transfer dt
+        LEFT JOIN hospital h1 ON dt.from_hospital_id = h1.id
+        LEFT JOIN hospital h2 ON dt.to_hospital_id = h2.id
+        LEFT JOIN sys_user u ON dt.created_by = u.id
+        <where>
+            <if test="transferNo != null and transferNo != ''">AND dt.transfer_no LIKE CONCAT('%', #{transferNo}, '%')</if>
+            <if test="fromHospitalId != null">AND dt.from_hospital_id = #{fromHospitalId}</if>
+            <if test="toHospitalId != null">AND dt.to_hospital_id = #{toHospitalId}</if>
+            <if test="status != null and status != ''">AND dt.status = #{status}</if>
+        </where>
+        ORDER BY dt.created_at DESC
+    </select>
+
+</mapper>
