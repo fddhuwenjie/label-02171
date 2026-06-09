@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.medcommunity.mapper.DrugExpiryAlertMapper">
+
+    <select id="selectAlertList" resultType="com.medcommunity.entity.DrugExpiryAlert">
+        SELECT ea.id, ea.drug_id, ea.hospital_id, ea.inventory_id, ea.batch_no,
+               ea.expire_date, ea.days_until_expiry, ea.status, ea.created_at, ea.updated_at,
+               d.name AS drug_name, d.code AS drug_code, d.spec, d.unit,
+               h.name AS hospital_name
+        FROM drug_expiry_alert ea
+        LEFT JOIN drug_info d ON ea.drug_id = d.id
+        LEFT JOIN hospital h ON ea.hospital_id = h.id
+        <where>
+            <if test="status != null and status != ''">AND ea.status = #{status}</if>
+        </where>
+        ORDER BY ea.days_until_expiry ASC, ea.created_at DESC
+    </select>
+
+    <select id="selectActiveAlerts" resultType="com.medcommunity.entity.DrugExpiryAlert">
+        SELECT ea.id, ea.drug_id, ea.hospital_id, ea.inventory_id, ea.batch_no,
+               ea.expire_date, ea.days_until_expiry, ea.status, ea.created_at, ea.updated_at,
+               d.name AS drug_name, d.code AS drug_code, d.spec, d.unit,
+               h.name AS hospital_name
+        FROM drug_expiry_alert ea
+        LEFT JOIN drug_info d ON ea.drug_id = d.id
+        LEFT JOIN hospital h ON ea.hospital_id = h.id
+        WHERE ea.status = 'ACTIVE'
+        ORDER BY ea.days_until_expiry ASC
+    </select>
+
+    <select id="selectActiveByInventoryId" resultType="com.medcommunity.entity.DrugExpiryAlert">
+        SELECT id, drug_id, hospital_id, inventory_id, batch_no,
+               expire_date, days_until_expiry, status, created_at, updated_at
+        FROM drug_expiry_alert
+        WHERE inventory_id = #{inventoryId} AND status = 'ACTIVE'
+        LIMIT 1
+    </select>
+
+</mapper>

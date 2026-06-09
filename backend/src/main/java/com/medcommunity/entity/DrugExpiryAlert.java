@@ -6,43 +6,46 @@ import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.util.List;
 
 @Data
-@TableName("drug_transfer")
-public class DrugTransfer {
+@TableName("drug_expiry_alert")
+public class DrugExpiryAlert {
 
     @TableId(type = IdType.AUTO)
     private Long id;
 
-    private String transferNo;
+    private Long drugId;
 
-    private Long fromHospitalId;
+    private Long hospitalId;
 
-    private Long toHospitalId;
+    private Long inventoryId;
+
+    private String batchNo;
+
+    private LocalDate expireDate;
+
+    private Integer daysUntilExpiry;
 
     private String status;
-
-    private String remark;
-
-    private String rejectReason;
-
-    private Long createdBy;
 
     private LocalDateTime createdAt;
 
     private LocalDateTime updatedAt;
 
     @TableField(exist = false)
-    private String fromHospitalName;
+    private String drugName;
 
     @TableField(exist = false)
-    private String toHospitalName;
+    private String drugCode;
 
     @TableField(exist = false)
-    private String createdByName;
+    private String spec;
 
     @TableField(exist = false)
-    private List<DrugTransferItem> items;
+    private String unit;
+
+    @TableField(exist = false)
+    private String hospitalName;
 }

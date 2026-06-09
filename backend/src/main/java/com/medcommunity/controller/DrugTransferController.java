@@ -56,8 +56,8 @@ public class DrugTransferController {
     }
 
     @PutMapping("/{id}/reject")
-    public Result<Void> reject(@PathVariable Long id) {
-        drugTransferService.reject(id);
+    public Result<Void> reject(@PathVariable Long id, @RequestParam String rejectReason) {
+        drugTransferService.reject(id, rejectReason);
         return Result.success();
     }
 

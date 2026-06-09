@@ -25,7 +25,7 @@
     <!-- 数据面板区域 -->
     <el-row :gutter="16" class="panel-row">
       <!-- 库存预警 -->
-      <el-col :span="8">
+      <el-col :span="6">
         <div class="data-panel">
           <div class="panel-header">
             <span class="panel-title">
@@ -61,8 +61,48 @@
         </div>
       </el-col>
 
+      <!-- 效期预警 -->
+      <el-col :span="6">
+        <div class="data-panel">
+          <div class="panel-header">
+            <span class="panel-title">
+              <el-icon class="title-icon expiry"><Timer /></el-icon>
+              效期预警
+            </span>
+            <el-button type="primary" link size="small" @click="$router.push('/expiry-alert')">
+              查看全部 <el-icon><ArrowRight /></el-icon>
+            </el-button>
+          </div>
+          <div class="panel-body" v-loading="expiryAlertsLoading">
+            <template v-if="expiryAlerts.length">
+              <div
+                v-for="item in expiryAlerts.slice(0, 5)"
+                :key="item.id"
+                class="list-item warning-item"
+              >
+                <div class="item-content">
+                  <div class="item-main">
+                    <span class="item-name">{{ item.drugName }}</span>
+                    <el-tag v-if="item.daysUntilExpiry <= 30" type="danger" size="small" effect="dark">紧急</el-tag>
+                    <el-tag v-else-if="item.daysUntilExpiry <= 60" type="warning" size="small" effect="dark">警告</el-tag>
+                    <el-tag v-else type="info" size="small">提醒</el-tag>
+                  </div>
+                  <div class="item-sub">{{ item.hospitalName }} · 批号：{{ item.batchNo || '-' }}</div>
+                </div>
+                <div class="item-extra">
+                  <span class="expiry-value" :class="{ danger: item.daysUntilExpiry <= 30, warning: item.daysUntilExpiry > 30 && item.daysUntilExpiry <= 60 }">
+                    {{ item.daysUntilExpiry }}天
+                  </span>
+                </div>
+              </div>
+            </template>
+            <el-empty v-else description="暂无预警" :image-size="60" />
+          </div>
+        </div>
+      </el-col>
+
       <!-- 待审批调拨 -->
-      <el-col :span="8">
+      <el-col :span="6">
         <div class="data-panel">
           <div class="panel-header">
             <span class="panel-title">
@@ -95,7 +135,7 @@
       </el-col>
 
       <!-- 待审批采购 -->
-      <el-col :span="8">
+      <el-col :span="6">
         <div class="data-panel">
           <div class="panel-header">
             <span class="panel-title">
@@ -156,6 +196,12 @@
           </div>
           <span class="action-text">药品调拨</span>
         </div>
+        <div class="action-card" @click="$router.push('/expiry-alert')">
+          <div class="action-icon" style="background: linear-gradient(135deg, #F5222D 0%, #FF7875 100%)">
+            <el-icon :size="24"><Timer /></el-icon>
+          </div>
+          <span class="action-text">效期预警</span>
+        </div>
         <div class="action-card" @click="$router.push('/hospital')">
           <div class="action-icon" style="background: linear-gradient(135deg, #13C2C2 0%, #5CDBD3 100%)">
             <el-icon :size="24"><OfficeBuilding /></el-icon>
@@ -177,15 +223,17 @@
 import { ref, reactive, onMounted } from 'vue'
 import { getStats } from '@/api/dashboard'
 import { getWarnings } from '@/api/inventory'
+import { getActiveAlerts } from '@/api/expiryAlert'
 import { getTransferPage } from '@/api/transfer'
 import { getPurchaseOrderPage } from '@/api/purchase'
 import {
   Tickets, OfficeBuilding, WarningFilled, Switch, ShoppingCart,
-  ArrowRight, Box, Document
+  ArrowRight, Box, Document, Timer
 } from '@element-plus/icons-vue'
 
 const statsLoading = ref(false)
 const warningsLoading = ref(false)
+const expiryAlertsLoading = ref(false)
 const transfersLoading = ref(false)
 const purchasesLoading = ref(false)
 
@@ -194,10 +242,12 @@ const stats = reactive({
   hospitalCount: 0,
   lowStockCount: 0,
   pendingTransferCount: 0,
-  pendingPurchaseCount: 0
+  pendingPurchaseCount: 0,
+  expiryAlertCount: 0
 })
 
 const warnings = ref([])
+const expiryAlerts = ref([])
 const pendingTransfers = ref([])
 const pendingPurchases = ref([])
 
@@ -205,6 +255,7 @@ const statCards = [
   { key: 'drugCount', label: '药品总数', icon: Tickets, color: '#FF7A45', bgColor: '#FFF2E8', route: '/drug' },
   { key: 'hospitalCount', label: '机构总数', icon: OfficeBuilding, color: '#1890FF', bgColor: '#E6F7FF', route: '/hospital' },
   { key: 'lowStockCount', label: '库存预警', icon: WarningFilled, color: '#F5222D', bgColor: '#FFF1F0', route: '/inventory' },
+  { key: 'expiryAlertCount', label: '效期预警', icon: Timer, color: '#FA541C', bgColor: '#FFF2E8', route: '/expiry-alert' },
   { key: 'pendingTransferCount', label: '待审批调拨', icon: Switch, color: '#722ED1', bgColor: '#F9F0FF', route: '/transfer' },
   { key: 'pendingPurchaseCount', label: '待审批采购', icon: ShoppingCart, color: '#52C41A', bgColor: '#F6FFED', route: '/purchase' }
 ]
@@ -212,6 +263,7 @@ const statCards = [
 onMounted(() => {
   fetchStats()
   fetchWarnings()
+  fetchExpiryAlerts()
   fetchPendingTransfers()
   fetchPendingPurchases()
 })
@@ -233,6 +285,16 @@ async function fetchWarnings() {
     warnings.value = res.data || []
   } finally {
     warningsLoading.value = false
+  }
+}
+
+async function fetchExpiryAlerts() {
+  expiryAlertsLoading.value = true
+  try {
+    const res = await getActiveAlerts()
+    expiryAlerts.value = res.data || []
+  } finally {
+    expiryAlertsLoading.value = false
   }
 }
 
@@ -262,7 +324,7 @@ async function fetchPendingPurchases() {
   // 统计卡片网格
   .stats-grid {
     display: grid;
-    grid-template-columns: repeat(5, 1fr);
+    grid-template-columns: repeat(6, 1fr);
     gap: 16px;
     margin-bottom: 16px;
   }
@@ -343,6 +405,7 @@ async function fetchPendingPurchases() {
         .title-icon {
           font-size: 18px;
           &.warning { color: #F5222D; }
+          &.expiry { color: #FA541C; }
           &.transfer { color: #722ED1; }
           &.purchase { color: #52C41A; }
         }
@@ -423,6 +486,12 @@ async function fetchPendingPurchases() {
           .stock-min {
             color: #999;
           }
+
+          .expiry-value {
+            font-weight: 600;
+            &.danger { color: #F5222D; }
+            &.warning { color: #FA8C16; }
+          }
         }
       }
 
@@ -451,7 +520,7 @@ async function fetchPendingPurchases() {
 
     .actions-grid {
       display: grid;
-      grid-template-columns: repeat(6, 1fr);
+      grid-template-columns: repeat(7, 1fr);
       gap: 16px;
     }
 

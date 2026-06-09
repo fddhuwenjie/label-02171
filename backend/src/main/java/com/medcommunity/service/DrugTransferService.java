@@ -14,7 +14,7 @@ public interface DrugTransferService {
 
     void approve(Long id);
 
-    void reject(Long id);
+    void reject(Long id, String rejectReason);
 
     void ship(Long id);
 

@@ -2,10 +2,12 @@ package com.medcommunity.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.medcommunity.dto.DashboardStats;
+import com.medcommunity.entity.DrugExpiryAlert;
 import com.medcommunity.entity.DrugInfo;
 import com.medcommunity.entity.DrugTransfer;
 import com.medcommunity.entity.Hospital;
 import com.medcommunity.entity.PurchaseOrder;
+import com.medcommunity.mapper.DrugExpiryAlertMapper;
 import com.medcommunity.mapper.DrugInfoMapper;
 import com.medcommunity.mapper.DrugInventoryMapper;
 import com.medcommunity.mapper.DrugTransferMapper;
@@ -35,6 +37,9 @@ public class DashboardServiceImpl implements DashboardService {
     @Autowired
     private PurchaseOrderMapper purchaseOrderMapper;
 
+    @Autowired
+    private DrugExpiryAlertMapper drugExpiryAlertMapper;
+
     @Override
     public DashboardStats getStats() {
         long drugCount = drugInfoMapper.selectCount(
@@ -50,7 +55,10 @@ public class DashboardServiceImpl implements DashboardService {
         long pendingPurchaseCount = purchaseOrderMapper.selectCount(
                 new LambdaQueryWrapper<PurchaseOrder>().eq(PurchaseOrder::getStatus, "PENDING")
         );
+        long expiryAlertCount = drugExpiryAlertMapper.selectCount(
+                new LambdaQueryWrapper<DrugExpiryAlert>().eq(DrugExpiryAlert::getStatus, "ACTIVE")
+        );
 
-        return new DashboardStats(drugCount, hospitalCount, lowStockCount, pendingTransferCount, pendingPurchaseCount);
+        return new DashboardStats(drugCount, hospitalCount, lowStockCount, pendingTransferCount, pendingPurchaseCount, expiryAlertCount);
     }
 }
