@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.medcommunity.mapper.DrugExpiryAlertMapper">
+
+    <sql id="baseColumns">
+        a.id, a.inventory_id, a.drug_id, a.hospital_id, a.batch_no,
+        a.expire_date, a.days_to_expire, a.alert_level, a.status,
+        a.created_at, a.updated_at,
+        d.name AS drug_name, d.code AS drug_code, d.spec, d.unit,
+        h.name AS hospital_name
+    </sql>
+
+    <select id="selectAlertPage" resultType="com.medcommunity.entity.DrugExpiryAlert">
+        SELECT
+        <include refid="baseColumns" />
+        FROM drug_expiry_alert a
+        LEFT JOIN drug_info d ON a.drug_id = d.id
+        LEFT JOIN hospital h ON a.hospital_id = h.id
+        <where>
+            <if test="drugId != null">AND a.drug_id = #{drugId}</if>
+            <if test="hospitalId != null">AND a.hospital_id = #{hospitalId}</if>
+            <if test="alertLevel != null and alertLevel != ''">AND a.alert_level = #{alertLevel}</if>
+            <if test="status != null">AND a.status = #{status}</if>
+        </where>
+        ORDER BY a.days_to_expire ASC, a.created_at DESC
+    </select>
+
+    <select id="selectRecentAlerts" resultType="com.medcommunity.entity.DrugExpiryAlert">
+        SELECT
+        <include refid="baseColumns" />
+        FROM drug_expiry_alert a
+        LEFT JOIN drug_info d ON a.drug_id = d.id
+        LEFT JOIN hospital h ON a.hospital_id = h.id
+        WHERE a.status = 1
+        ORDER BY a.days_to_expire ASC, a.created_at DESC
+        LIMIT #{limit}
+    </select>
+
+</mapper>

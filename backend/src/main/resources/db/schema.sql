@@ -98,6 +98,7 @@ CREATE TABLE drug_transfer (
     to_hospital_id BIGINT NOT NULL,
     status VARCHAR(20) NOT NULL DEFAULT 'PENDING' COMMENT 'PENDING/APPROVED/SHIPPING/COMPLETED/REJECTED',
     remark VARCHAR(500),
+    reject_reason VARCHAR(500) COMMENT '驳回理由',
     created_by BIGINT,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -125,4 +126,21 @@ CREATE TABLE inventory_log (
     remark VARCHAR(200),
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     INDEX idx_drug_hospital (drug_id, hospital_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE drug_expiry_alert (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    inventory_id BIGINT NOT NULL COMMENT '关联库存记录ID',
+    drug_id BIGINT NOT NULL,
+    hospital_id BIGINT NOT NULL,
+    batch_no VARCHAR(50),
+    expire_date DATE NOT NULL COMMENT '过期日期',
+    days_to_expire INT NOT NULL COMMENT '距离过期剩余天数',
+    alert_level VARCHAR(20) NOT NULL DEFAULT 'WARNING' COMMENT 'WARNING/CRITICAL/EXPIRED',
+    status TINYINT NOT NULL DEFAULT 1 COMMENT '0-已处理 1-未处理',
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY uk_inventory (inventory_id),
+    INDEX idx_drug_hospital (drug_id, hospital_id),
+    INDEX idx_status (status)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

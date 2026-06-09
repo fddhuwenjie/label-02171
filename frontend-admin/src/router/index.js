@@ -56,6 +56,12 @@ const routes = [
         meta: { title: '药品调拨' }
       },
       {
+        path: 'expiry-alert',
+        name: 'ExpiryAlert',
+        component: () => import('@/views/expiryAlert/index.vue'),
+        meta: { title: '效期预警' }
+      },
+      {
         path: 'log',
         name: 'Log',
         component: () => import('@/views/log/index.vue'),
