@@ -20,8 +20,10 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Random;
 
@@ -61,9 +63,51 @@ public class DrugTransferServiceImpl implements DrugTransferService {
         return transfer;
     }
 
+    /**
+     * 创建调拨单，创建前检查调出药品批次的效期。
+     * 如果调出的药品批次距离过期不足30天，系统自动拒绝并提示"近效期药品不可调拨"。
+     *
+     * @param request 调拨请求
+     * @param userId 创建人ID
+     * @return 创建的调拨单
+     */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public DrugTransfer create(TransferRequest request, Long userId) {
+        for (TransferRequest.TransferItemDTO itemDTO : request.getItems()) {
+            if (itemDTO.getBatchNo() != null && !itemDTO.getBatchNo().isEmpty()) {
+                DrugInventory inventory = drugInventoryMapper.selectOne(
+                        new LambdaQueryWrapper<DrugInventory>()
+                                .eq(DrugInventory::getDrugId, itemDTO.getDrugId())
+                                .eq(DrugInventory::getHospitalId, request.getFromHospitalId())
+                                .eq(DrugInventory::getBatchNo, itemDTO.getBatchNo())
+                );
+                if (inventory != null && inventory.getExpireDate() != null) {
+                    long daysUntilExpiry = ChronoUnit.DAYS.between(LocalDate.now(), inventory.getExpireDate());
+                    if (daysUntilExpiry < 30) {
+                        throw new BusinessException("近效期药品不可调拨（药品ID：" + itemDTO.getDrugId()
+                                + "，批号：" + itemDTO.getBatchNo()
+                                + "，距过期仅" + daysUntilExpiry + "天）");
+                    }
+                }
+            } else {
+                List<DrugInventory> inventories = drugInventoryMapper.selectList(
+                        new LambdaQueryWrapper<DrugInventory>()
+                                .eq(DrugInventory::getDrugId, itemDTO.getDrugId())
+                                .eq(DrugInventory::getHospitalId, request.getFromHospitalId())
+                                .isNotNull(DrugInventory::getExpireDate)
+                );
+                for (DrugInventory inv : inventories) {
+                    long daysUntilExpiry = ChronoUnit.DAYS.between(LocalDate.now(), inv.getExpireDate());
+                    if (daysUntilExpiry < 30) {
+                        throw new BusinessException("近效期药品不可调拨（药品ID：" + itemDTO.getDrugId()
+                                + "，批号：" + inv.getBatchNo()
+                                + "，距过期仅" + daysUntilExpiry + "天）");
+                    }
+                }
+            }
+        }
+
         DrugTransfer transfer = new DrugTransfer();
         transfer.setTransferNo(generateTransferNo());
         transfer.setFromHospitalId(request.getFromHospitalId());
@@ -112,9 +156,15 @@ public class DrugTransferServiceImpl implements DrugTransferService {
         log.info("审批调拨单: transferNo={}", transfer.getTransferNo());
     }
 
+    /**
+     * 驳回调拨单，记录驳回理由。
+     *
+     * @param id 调拨单ID
+     * @param rejectReason 驳回理由
+     */
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public void reject(Long id) {
+    public void reject(Long id, String rejectReason) {
         DrugTransfer transfer = drugTransferMapper.selectById(id);
         if (transfer == null) {
             throw new BusinessException("调拨单不存在");
@@ -123,8 +173,9 @@ public class DrugTransferServiceImpl implements DrugTransferService {
             throw new BusinessException("只有待审批的调拨单才能驳回");
         }
         transfer.setStatus("REJECTED");
+        transfer.setRejectReason(rejectReason);
         drugTransferMapper.updateById(transfer);
-        log.info("驳回调拨单: transferNo={}", transfer.getTransferNo());
+        log.info("驳回调拨单: transferNo={}, reason={}", transfer.getTransferNo(), rejectReason);
     }
 
     @Override
