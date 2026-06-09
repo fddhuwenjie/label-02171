@@ -55,9 +55,16 @@ public class DrugTransferController {
         return Result.success();
     }
 
+    /**
+     * 驳回调拨单
+     *
+     * @param id 调拨单ID
+     * @param rejectReason 驳回理由
+     * @return 操作结果
+     */
     @PutMapping("/{id}/reject")
-    public Result<Void> reject(@PathVariable Long id) {
-        drugTransferService.reject(id);
+    public Result<Void> reject(@PathVariable Long id, @RequestParam(required = false) String rejectReason) {
+        drugTransferService.reject(id, rejectReason);
         return Result.success();
     }
 

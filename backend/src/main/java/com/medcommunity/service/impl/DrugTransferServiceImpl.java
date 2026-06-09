@@ -44,6 +44,9 @@ public class DrugTransferServiceImpl implements DrugTransferService {
     @Autowired
     private InventoryService inventoryService;
 
+    @Autowired
+    private DrugExpiryAlertService drugExpiryAlertService;
+
     @Override
     public IPage<DrugTransfer> pageList(String transferNo, Long fromHospitalId, Long toHospitalId, String status, int page, int size) {
         Page<DrugTransfer> pageParam = new Page<>(page, size);
@@ -64,6 +67,19 @@ public class DrugTransferServiceImpl implements DrugTransferService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public DrugTransfer create(TransferRequest request, Long userId) {
+        for (TransferRequest.TransferItemDTO itemDTO : request.getItems()) {
+            if (itemDTO.getBatchNo() != null && !itemDTO.getBatchNo().isEmpty()) {
+                boolean nearExpiry = drugExpiryAlertService.isNearExpiry(
+                        itemDTO.getDrugId(),
+                        request.getFromHospitalId(),
+                        itemDTO.getBatchNo()
+                );
+                if (nearExpiry) {
+                    throw new BusinessException("近效期药品不可调拨，药品ID：" + itemDTO.getDrugId() + "，批号：" + itemDTO.getBatchNo());
+                }
+            }
+        }
+
         DrugTransfer transfer = new DrugTransfer();
         transfer.setTransferNo(generateTransferNo());
         transfer.setFromHospitalId(request.getFromHospitalId());
@@ -114,7 +130,7 @@ public class DrugTransferServiceImpl implements DrugTransferService {
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public void reject(Long id) {
+    public void reject(Long id, String rejectReason) {
         DrugTransfer transfer = drugTransferMapper.selectById(id);
         if (transfer == null) {
             throw new BusinessException("调拨单不存在");
@@ -123,8 +139,9 @@ public class DrugTransferServiceImpl implements DrugTransferService {
             throw new BusinessException("只有待审批的调拨单才能驳回");
         }
         transfer.setStatus("REJECTED");
+        transfer.setRejectReason(rejectReason);
         drugTransferMapper.updateById(transfer);
-        log.info("驳回调拨单: transferNo={}", transfer.getTransferNo());
+        log.info("驳回调拨单: transferNo={}, rejectReason={}", transfer.getTransferNo(), rejectReason);
     }
 
     @Override

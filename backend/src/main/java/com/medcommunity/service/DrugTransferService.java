@@ -14,7 +14,13 @@ public interface DrugTransferService {
 
     void approve(Long id);
 
-    void reject(Long id);
+    /**
+     * 驳回调拨单
+     *
+     * @param id 调拨单ID
+     * @param rejectReason 驳回理由
+     */
+    void reject(Long id, String rejectReason);
 
     void ship(Long id);
 

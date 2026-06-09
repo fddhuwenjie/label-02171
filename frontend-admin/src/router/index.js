@@ -60,6 +60,12 @@ const routes = [
         name: 'Log',
         component: () => import('@/views/log/index.vue'),
         meta: { title: '库存日志' }
+      },
+      {
+        path: 'expiry-alert',
+        name: 'ExpiryAlert',
+        component: () => import('@/views/expiry-alert/index.vue'),
+        meta: { title: '效期预警' }
       }
     ]
   }
