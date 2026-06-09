@@ -18,4 +18,6 @@ public class DashboardStats {
     private long pendingTransferCount;
 
     private long pendingPurchaseCount;
+
+    private long expiryAlertCount;
 }

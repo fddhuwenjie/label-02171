@@ -45,6 +45,10 @@
           <el-icon><Document /></el-icon>
           <span>库存日志</span>
         </el-menu-item>
+        <el-menu-item index="/expiry-alert">
+          <el-icon><Warning /></el-icon>
+          <span>效期预警</span>
+        </el-menu-item>
       </el-menu>
     </el-aside>
 

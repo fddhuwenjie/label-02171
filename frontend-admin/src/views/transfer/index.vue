@@ -171,10 +171,29 @@
       </div>
       <template #footer>
         <el-button @click="approveVisible = false">取消</el-button>
-        <el-button type="danger" link @click="doReject">驳回</el-button>
+        <el-button type="danger" link @click="openRejectDialog">驳回</el-button>
         <el-button type="primary" :disabled="approveInsufficient" :loading="approveLoading" @click="doApprove">
           同意审批
         </el-button>
+      </template>
+    </el-dialog>
+
+    <el-dialog v-model="rejectVisible" title="驳回调拨单" width="500px" destroy-on-close>
+      <el-form ref="rejectFormRef" :model="rejectForm" :rules="rejectRules" label-width="80px">
+        <el-form-item label="驳回理由" prop="rejectReason">
+          <el-input
+            v-model="rejectForm.rejectReason"
+            type="textarea"
+            :rows="4"
+            placeholder="请输入驳回理由"
+            maxlength="500"
+            show-word-limit
+          />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="rejectVisible = false">取消</el-button>
+        <el-button type="danger" :loading="rejectLoading" @click="doReject">确认驳回</el-button>
       </template>
     </el-dialog>
 
@@ -190,6 +209,9 @@
         <el-descriptions-item label="调入机构">{{ detail.toHospitalName }}</el-descriptions-item>
         <el-descriptions-item label="创建时间">{{ detail.createdAt }}</el-descriptions-item>
         <el-descriptions-item label="备注">{{ detail.remark || '-' }}</el-descriptions-item>
+        <el-descriptions-item v-if="detail.status === 'REJECTED'" label="驳回理由" :span="2">
+          <span class="reject-reason">{{ detail.rejectReason || '-' }}</span>
+        </el-descriptions-item>
       </el-descriptions>
 
       <el-table :data="detail.items || []" border size="small" style="margin-top: 16px">
@@ -247,7 +269,7 @@ const createRules = {
 const detailVisible = ref(false)
 const detail = reactive({
   transferNo: '', fromHospitalName: '', toHospitalName: '', status: '',
-  createdAt: '', remark: '', items: []
+  createdAt: '', remark: '', rejectReason: '', items: []
 })
 
 const itemStockCache = reactive({})
@@ -414,6 +436,16 @@ const approveStockList = ref([])
 const approveInsufficient = ref(false)
 const approveLoading = ref(false)
 
+const rejectVisible = ref(false)
+const rejectFormRef = ref(null)
+const rejectLoading = ref(false)
+const rejectForm = reactive({
+  rejectReason: ''
+})
+const rejectRules = {
+  rejectReason: [{ required: true, message: '请输入驳回理由', trigger: 'blur' }]
+}
+
 async function handleApprove(row) {
   approveTransferRow.value = row
   approveVisible.value = true
@@ -424,6 +456,11 @@ async function handleReject(row) {
   approveTransferRow.value = row
   approveVisible.value = true
   await loadApproveStock(row)
+}
+
+function openRejectDialog() {
+  rejectForm.rejectReason = ''
+  rejectVisible.value = true
 }
 
 async function loadApproveStock(row) {
@@ -472,13 +509,19 @@ async function doApprove() {
 }
 
 async function doReject() {
+  const valid = await rejectFormRef.value.validate().catch(() => false)
+  if (!valid) return
+  rejectLoading.value = true
   try {
-    await rejectTransfer(approveTransferRow.value.id)
+    await rejectTransfer(approveTransferRow.value.id, rejectForm.rejectReason)
     ElMessage.success('已驳回')
     approveVisible.value = false
+    rejectVisible.value = false
     fetchData()
   } catch (e) {
     ElMessage.error(e?.response?.data?.message || '驳回失败')
+  } finally {
+    rejectLoading.value = false
   }
 }
 
@@ -531,5 +574,10 @@ async function handleComplete(row) {
   font-weight: 600;
   margin-bottom: 8px;
   color: #333;
+}
+
+.reject-reason {
+  color: #f5222d;
+  font-weight: 500;
 }
 </style>
