@@ -16,8 +16,8 @@ export function approveTransfer(id) {
   return request({ url: `/transfers/${id}/approve`, method: 'put' })
 }
 
-export function rejectTransfer(id) {
-  return request({ url: `/transfers/${id}/reject`, method: 'put' })
+export function rejectTransfer(id, rejectReason) {
+  return request({ url: `/transfers/${id}/reject`, method: 'put', data: { rejectReason } })
 }
 
 export function shipTransfer(id) {

@@ -4,11 +4,13 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.medcommunity.dto.TransferRequest;
+import com.medcommunity.entity.DrugInfo;
 import com.medcommunity.entity.DrugInventory;
 import com.medcommunity.entity.DrugTransfer;
 import com.medcommunity.entity.DrugTransferItem;
 import com.medcommunity.entity.InventoryLog;
 import com.medcommunity.exception.BusinessException;
+import com.medcommunity.mapper.DrugInfoMapper;
 import com.medcommunity.service.InventoryService;
 import com.medcommunity.mapper.DrugInventoryMapper;
 import com.medcommunity.mapper.DrugTransferItemMapper;
@@ -20,6 +22,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
@@ -28,6 +31,8 @@ import java.util.Random;
 @Slf4j
 @Service
 public class DrugTransferServiceImpl implements DrugTransferService {
+
+    private static final int NEAR_EXPIRY_DAYS_FOR_TRANSFER = 30;
 
     @Autowired
     private DrugTransferMapper drugTransferMapper;
@@ -44,12 +49,21 @@ public class DrugTransferServiceImpl implements DrugTransferService {
     @Autowired
     private InventoryService inventoryService;
 
+    @Autowired
+    private DrugInfoMapper drugInfoMapper;
+
+    /**
+     * 分页查询调拨单列表（含机构名称关联）
+     */
     @Override
     public IPage<DrugTransfer> pageList(String transferNo, Long fromHospitalId, Long toHospitalId, String status, int page, int size) {
         Page<DrugTransfer> pageParam = new Page<>(page, size);
         return drugTransferMapper.selectTransferList(pageParam, transferNo, fromHospitalId, toHospitalId, status);
     }
 
+    /**
+     * 获取调拨单详情，包含明细列表
+     */
     @Override
     public DrugTransfer getDetail(Long id) {
         DrugTransfer transfer = drugTransferMapper.selectById(id);
@@ -61,9 +75,37 @@ public class DrugTransferServiceImpl implements DrugTransferService {
         return transfer;
     }
 
+    /**
+     * 创建调拨单。
+     * 创建前校验调出药品批次效期：距离过期日期不足30天的药品不允许调拨，自动拒绝并提示。
+     */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public DrugTransfer create(TransferRequest request, Long userId) {
+        for (TransferRequest.TransferItemDTO itemDTO : request.getItems()) {
+            DrugInventory inventory = drugInventoryMapper.selectOne(
+                    new LambdaQueryWrapper<DrugInventory>()
+                            .eq(DrugInventory::getDrugId, itemDTO.getDrugId())
+                            .eq(DrugInventory::getHospitalId, request.getFromHospitalId())
+                            .eq(itemDTO.getBatchNo() != null, DrugInventory::getBatchNo, itemDTO.getBatchNo())
+            );
+            if (inventory != null && inventory.getExpireDate() != null) {
+                LocalDate today = LocalDate.now();
+                LocalDate expireDate = inventory.getExpireDate();
+                long daysToExpire = java.time.temporal.ChronoUnit.DAYS.between(today, expireDate);
+                if (!expireDate.isBefore(today) && daysToExpire < NEAR_EXPIRY_DAYS_FOR_TRANSFER) {
+                    DrugInfo drugInfo = drugInfoMapper.selectById(itemDTO.getDrugId());
+                    String drugName = drugInfo != null ? drugInfo.getName() : String.valueOf(itemDTO.getDrugId());
+                    throw new BusinessException("近效期药品不可调拨：「" + drugName + "」将于 " + expireDate + " 过期，距过期仅剩 " + daysToExpire + " 天");
+                }
+                if (expireDate.isBefore(today)) {
+                    DrugInfo drugInfo = drugInfoMapper.selectById(itemDTO.getDrugId());
+                    String drugName = drugInfo != null ? drugInfo.getName() : String.valueOf(itemDTO.getDrugId());
+                    throw new BusinessException("近效期药品不可调拨：「" + drugName + "」已于 " + expireDate + " 过期");
+                }
+            }
+        }
+
         DrugTransfer transfer = new DrugTransfer();
         transfer.setTransferNo(generateTransferNo());
         transfer.setFromHospitalId(request.getFromHospitalId());
@@ -86,6 +128,9 @@ public class DrugTransferServiceImpl implements DrugTransferService {
         return transfer;
     }
 
+    /**
+     * 审批通过调拨单，审批时校验库存可用量（含预留量扣减）
+     */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void approve(Long id) {
@@ -112,9 +157,17 @@ public class DrugTransferServiceImpl implements DrugTransferService {
         log.info("审批调拨单: transferNo={}", transfer.getTransferNo());
     }
 
+    /**
+     * 驳回调拨单，记录驳回理由
+     * @param id 调拨单ID
+     * @param rejectReason 驳回理由，不能为空
+     */
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public void reject(Long id) {
+    public void reject(Long id, String rejectReason) {
+        if (rejectReason == null || rejectReason.trim().isEmpty()) {
+            throw new BusinessException("驳回理由不能为空");
+        }
         DrugTransfer transfer = drugTransferMapper.selectById(id);
         if (transfer == null) {
             throw new BusinessException("调拨单不存在");
@@ -123,10 +176,14 @@ public class DrugTransferServiceImpl implements DrugTransferService {
             throw new BusinessException("只有待审批的调拨单才能驳回");
         }
         transfer.setStatus("REJECTED");
+        transfer.setRejectReason(rejectReason.trim());
         drugTransferMapper.updateById(transfer);
-        log.info("驳回调拨单: transferNo={}", transfer.getTransferNo());
+        log.info("驳回调拨单: transferNo={}, reason={}", transfer.getTransferNo(), rejectReason);
     }
 
+    /**
+     * 调拨单发货（APPROVED → SHIPPING）
+     */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void ship(Long id) {
@@ -142,6 +199,9 @@ public class DrugTransferServiceImpl implements DrugTransferService {
         log.info("调拨单发货: transferNo={}", transfer.getTransferNo());
     }
 
+    /**
+     * 完成调拨单收货确认，执行调出方出库、调入方入库操作
+     */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void complete(Long id, String operator) {
@@ -160,7 +220,6 @@ public class DrugTransferServiceImpl implements DrugTransferService {
         );
 
         for (DrugTransferItem item : items) {
-            // 扣减调出方库存
             DrugInventory fromInventory = drugInventoryMapper.selectOne(
                     new LambdaQueryWrapper<DrugInventory>()
                             .eq(DrugInventory::getDrugId, item.getDrugId())
@@ -172,7 +231,6 @@ public class DrugTransferServiceImpl implements DrugTransferService {
             fromInventory.setQuantity(fromInventory.getQuantity() - item.getQuantity());
             drugInventoryMapper.updateById(fromInventory);
 
-            // 增加调入方库存
             DrugInventory toInventory = drugInventoryMapper.selectOne(
                     new LambdaQueryWrapper<DrugInventory>()
                             .eq(DrugInventory::getDrugId, item.getDrugId())
@@ -190,7 +248,6 @@ public class DrugTransferServiceImpl implements DrugTransferService {
                 drugInventoryMapper.updateById(toInventory);
             }
 
-            // 调出方库存日志
             InventoryLog outLog = new InventoryLog();
             outLog.setDrugId(item.getDrugId());
             outLog.setHospitalId(transfer.getFromHospitalId());
@@ -201,7 +258,6 @@ public class DrugTransferServiceImpl implements DrugTransferService {
             outLog.setRemark("调拨出库，调拨单号：" + transfer.getTransferNo());
             inventoryLogMapper.insert(outLog);
 
-            // 调入方库存日志
             InventoryLog inLog = new InventoryLog();
             inLog.setDrugId(item.getDrugId());
             inLog.setHospitalId(transfer.getToHospitalId());

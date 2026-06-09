@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.medcommunity.mapper.DrugExpiryAlertMapper">
+
+    <select id="selectAlertPage" resultType="com.medcommunity.entity.DrugExpiryAlert">
+        SELECT dea.id, dea.inventory_id, dea.drug_id, dea.hospital_id, dea.batch_no,
+               dea.expire_date, dea.days_to_expire, dea.quantity, dea.alert_level,
+               dea.status, dea.created_at, dea.updated_at,
+               d.name AS drug_name, d.code AS drug_code, d.spec, d.unit,
+               h.name AS hospital_name
+        FROM drug_expiry_alert dea
+        LEFT JOIN drug_info d ON dea.drug_id = d.id
+        LEFT JOIN hospital h ON dea.hospital_id = h.id
+        <where>
+            dea.status = 'ACTIVE'
+            <if test="hospitalId != null">AND dea.hospital_id = #{hospitalId}</if>
+            <if test="alertLevel != null and alertLevel != ''">AND dea.alert_level = #{alertLevel}</if>
+            <if test="status != null and status != ''">AND dea.status = #{status}</if>
+        </where>
+        ORDER BY dea.days_to_expire ASC, dea.created_at DESC
+    </select>
+
+    <select id="selectActiveAlerts" resultType="com.medcommunity.entity.DrugExpiryAlert">
+        SELECT dea.id, dea.inventory_id, dea.drug_id, dea.hospital_id, dea.batch_no,
+               dea.expire_date, dea.days_to_expire, dea.quantity, dea.alert_level,
+               dea.status, dea.created_at, dea.updated_at,
+               d.name AS drug_name, d.code AS drug_code, d.spec, d.unit,
+               h.name AS hospital_name
+        FROM drug_expiry_alert dea
+        LEFT JOIN drug_info d ON dea.drug_id = d.id
+        LEFT JOIN hospital h ON dea.hospital_id = h.id
+        WHERE dea.status = 'ACTIVE'
+        ORDER BY dea.days_to_expire ASC
+        <if test="limit != null">LIMIT #{limit}</if>
+    </select>
+
+    <select id="selectAllActiveAlerts" resultType="com.medcommunity.entity.DrugExpiryAlert">
+        SELECT id, inventory_id, drug_id, hospital_id, batch_no, expire_date,
+               days_to_expire, quantity, alert_level, status
+        FROM drug_expiry_alert
+        WHERE status = 'ACTIVE'
+    </select>
+
+    <select id="countActiveAlerts" resultType="long">
+        SELECT COUNT(*) FROM drug_expiry_alert WHERE status = 'ACTIVE'
+    </select>
+
+</mapper>

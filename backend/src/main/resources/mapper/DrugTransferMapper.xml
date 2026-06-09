@@ -4,7 +4,7 @@
 
     <select id="selectTransferList" resultType="com.medcommunity.entity.DrugTransfer">
         SELECT dt.id, dt.transfer_no, dt.from_hospital_id, dt.to_hospital_id, dt.status,
-               dt.remark, dt.created_by, dt.created_at, dt.updated_at,
+               dt.remark, dt.reject_reason, dt.created_by, dt.created_at, dt.updated_at,
                h1.name AS from_hospital_name, h2.name AS to_hospital_name, u.real_name AS created_by_name
         FROM drug_transfer dt
         LEFT JOIN hospital h1 ON dt.from_hospital_id = h1.id
