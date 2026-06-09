@@ -2,6 +2,7 @@ package com.medcommunity.controller;
 
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.medcommunity.common.Result;
+import com.medcommunity.dto.TransferRejectRequest;
 import com.medcommunity.dto.TransferRequest;
 import com.medcommunity.entity.DrugTransfer;
 import com.medcommunity.service.DrugTransferService;
@@ -55,9 +56,16 @@ public class DrugTransferController {
         return Result.success();
     }
 
+    /**
+     * 驳回调拨单。请求体必须携带驳回理由，记录后供发起人查询。
+     *
+     * @param id      调拨单ID
+     * @param request 包含驳回理由的请求体
+     * @return 空结果
+     */
     @PutMapping("/{id}/reject")
-    public Result<Void> reject(@PathVariable Long id) {
-        drugTransferService.reject(id);
+    public Result<Void> reject(@PathVariable Long id, @Valid @RequestBody TransferRejectRequest request) {
+        drugTransferService.reject(id, request.getRejectReason());
         return Result.success();
     }
 

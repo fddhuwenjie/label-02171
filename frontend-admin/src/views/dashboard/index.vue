@@ -25,7 +25,7 @@
     <!-- 数据面板区域 -->
     <el-row :gutter="16" class="panel-row">
       <!-- 库存预警 -->
-      <el-col :span="8">
+      <el-col :span="6">
         <div class="data-panel">
           <div class="panel-header">
             <span class="panel-title">
@@ -61,8 +61,43 @@
         </div>
       </el-col>
 
+      <!-- 效期预警 -->
+      <el-col :span="6">
+        <div class="data-panel">
+          <div class="panel-header">
+            <span class="panel-title">
+              <el-icon class="title-icon expiry"><AlarmClock /></el-icon>
+              效期预警
+            </span>
+            <el-button type="primary" link size="small" @click="$router.push('/expiry-alert')">
+              查看全部 <el-icon><ArrowRight /></el-icon>
+            </el-button>
+          </div>
+          <div class="panel-body" v-loading="expiryLoading">
+            <template v-if="expiryAlerts.length">
+              <div
+                v-for="item in expiryAlerts.slice(0, 5)"
+                :key="item.id"
+                class="list-item"
+              >
+                <div class="item-content">
+                  <div class="item-main">
+                    <span class="item-name">{{ item.drugName }}</span>
+                  </div>
+                  <div class="item-sub">{{ item.hospitalName }} · 批号 {{ item.batchNo || '-' }}</div>
+                </div>
+                <el-tag class="item-tag expiry-tag" size="small" type="danger" effect="dark">
+                  {{ formatExpiryLabel(item) }}
+                </el-tag>
+              </div>
+            </template>
+            <el-empty v-else description="暂无效期预警" :image-size="60" />
+          </div>
+        </div>
+      </el-col>
+
       <!-- 待审批调拨 -->
-      <el-col :span="8">
+      <el-col :span="6">
         <div class="data-panel">
           <div class="panel-header">
             <span class="panel-title">
@@ -95,7 +130,7 @@
       </el-col>
 
       <!-- 待审批采购 -->
-      <el-col :span="8">
+      <el-col :span="6">
         <div class="data-panel">
           <div class="panel-header">
             <span class="panel-title">
@@ -179,15 +214,17 @@ import { getStats } from '@/api/dashboard'
 import { getWarnings } from '@/api/inventory'
 import { getTransferPage } from '@/api/transfer'
 import { getPurchaseOrderPage } from '@/api/purchase'
+import { getRecentExpiryAlerts } from '@/api/expiryAlert'
 import {
   Tickets, OfficeBuilding, WarningFilled, Switch, ShoppingCart,
-  ArrowRight, Box, Document
+  ArrowRight, Box, Document, AlarmClock
 } from '@element-plus/icons-vue'
 
 const statsLoading = ref(false)
 const warningsLoading = ref(false)
 const transfersLoading = ref(false)
 const purchasesLoading = ref(false)
+const expiryLoading = ref(false)
 
 const stats = reactive({
   drugCount: 0,
@@ -200,6 +237,7 @@ const stats = reactive({
 const warnings = ref([])
 const pendingTransfers = ref([])
 const pendingPurchases = ref([])
+const expiryAlerts = ref([])
 
 const statCards = [
   { key: 'drugCount', label: '药品总数', icon: Tickets, color: '#FF7A45', bgColor: '#FFF2E8', route: '/drug' },
@@ -214,6 +252,7 @@ onMounted(() => {
   fetchWarnings()
   fetchPendingTransfers()
   fetchPendingPurchases()
+  fetchExpiryAlerts()
 })
 
 async function fetchStats() {
@@ -254,6 +293,22 @@ async function fetchPendingPurchases() {
   } finally {
     purchasesLoading.value = false
   }
+}
+
+async function fetchExpiryAlerts() {
+  expiryLoading.value = true
+  try {
+    const res = await getRecentExpiryAlerts(5)
+    expiryAlerts.value = res.data || []
+  } finally {
+    expiryLoading.value = false
+  }
+}
+
+function formatExpiryLabel(item) {
+  if (item.daysToExpire == null) return '临期'
+  if (item.daysToExpire < 0) return '已过期'
+  return `剩 ${item.daysToExpire} 天`
 }
 </script>
 
@@ -345,6 +400,7 @@ async function fetchPendingPurchases() {
           &.warning { color: #F5222D; }
           &.transfer { color: #722ED1; }
           &.purchase { color: #52C41A; }
+          &.expiry { color: #F5222D; }
         }
       }
     }

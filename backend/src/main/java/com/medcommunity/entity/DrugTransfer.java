@@ -26,6 +26,11 @@ public class DrugTransfer {
 
     private String remark;
 
+    /**
+     * 驳回理由（仅当 status=REJECTED 时有值）。
+     */
+    private String rejectReason;
+
     private Long createdBy;
 
     private LocalDateTime createdAt;

@@ -19,15 +19,24 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Random;
 
 @Slf4j
 @Service
 public class DrugTransferServiceImpl implements DrugTransferService {
+
+    /**
+     * 调拨创建时的近效期阈值（天）。
+     * 调出药品批次距离过期不足该天数时，禁止调拨。
+     */
+    private static final long TRANSFER_NEAR_EXPIRY_DAYS = 30L;
 
     @Autowired
     private DrugTransferMapper drugTransferMapper;
@@ -64,6 +73,10 @@ public class DrugTransferServiceImpl implements DrugTransferService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public DrugTransfer create(TransferRequest request, Long userId) {
+        // 创建前对每一条调拨明细做近效期校验：调出方对应批次的过期日距今不足
+        // TRANSFER_NEAR_EXPIRY_DAYS 天，则拒绝创建。
+        validateBatchesNotNearExpiry(request);
+
         DrugTransfer transfer = new DrugTransfer();
         transfer.setTransferNo(generateTransferNo());
         transfer.setFromHospitalId(request.getFromHospitalId());
@@ -84,6 +97,40 @@ public class DrugTransferServiceImpl implements DrugTransferService {
 
         log.info("创建调拨单: transferNo={}", transfer.getTransferNo());
         return transfer;
+    }
+
+    /**
+     * 校验调拨明细中所有调出批次距离过期日均不低于
+     * {@link #TRANSFER_NEAR_EXPIRY_DAYS} 天。
+     * 如果有任意批次属于近效期，抛出 {@link BusinessException} 阻止创建。
+     *
+     * @param request 调拨请求
+     */
+    private void validateBatchesNotNearExpiry(TransferRequest request) {
+        if (request == null || request.getItems() == null || request.getFromHospitalId() == null) {
+            return;
+        }
+        LocalDate today = LocalDate.now();
+        for (TransferRequest.TransferItemDTO itemDTO : request.getItems()) {
+            // 没有指定批号时，按调出机构 + 药品维度查询所有批次中最早过期的一条
+            LambdaQueryWrapper<DrugInventory> wrapper = new LambdaQueryWrapper<DrugInventory>()
+                    .eq(DrugInventory::getDrugId, itemDTO.getDrugId())
+                    .eq(DrugInventory::getHospitalId, request.getFromHospitalId());
+            if (StringUtils.hasText(itemDTO.getBatchNo())) {
+                wrapper.eq(DrugInventory::getBatchNo, itemDTO.getBatchNo());
+            }
+            wrapper.isNotNull(DrugInventory::getExpireDate)
+                    .orderByAsc(DrugInventory::getExpireDate)
+                    .last("LIMIT 1");
+            DrugInventory inv = drugInventoryMapper.selectOne(wrapper);
+            if (inv == null || inv.getExpireDate() == null) {
+                continue;
+            }
+            long days = ChronoUnit.DAYS.between(today, inv.getExpireDate());
+            if (days < TRANSFER_NEAR_EXPIRY_DAYS) {
+                throw new BusinessException("近效期药品不可调拨");
+            }
+        }
     }
 
     @Override
@@ -114,7 +161,10 @@ public class DrugTransferServiceImpl implements DrugTransferService {
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public void reject(Long id) {
+    public void reject(Long id, String rejectReason) {
+        if (!StringUtils.hasText(rejectReason)) {
+            throw new BusinessException("驳回理由不能为空");
+        }
         DrugTransfer transfer = drugTransferMapper.selectById(id);
         if (transfer == null) {
             throw new BusinessException("调拨单不存在");
@@ -123,8 +173,9 @@ public class DrugTransferServiceImpl implements DrugTransferService {
             throw new BusinessException("只有待审批的调拨单才能驳回");
         }
         transfer.setStatus("REJECTED");
+        transfer.setRejectReason(rejectReason);
         drugTransferMapper.updateById(transfer);
-        log.info("驳回调拨单: transferNo={}", transfer.getTransferNo());
+        log.info("驳回调拨单: transferNo={}, reason={}", transfer.getTransferNo(), rejectReason);
     }
 
     @Override
