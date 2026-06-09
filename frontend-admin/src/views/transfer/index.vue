@@ -51,11 +51,19 @@
           </template>
         </el-table-column>
         <el-table-column prop="createdAt" label="创建时间" width="170" />
+        <el-table-column label="驳回理由" min-width="160" show-overflow-tooltip>
+          <template #default="{ row }">
+            <span v-if="row.status === 'REJECTED'" class="reject-reason-cell">
+              {{ row.rejectReason || '-' }}
+            </span>
+            <span v-else class="text-muted">-</span>
+          </template>
+        </el-table-column>
         <el-table-column label="操作" width="240" fixed="right">
           <template #default="{ row }">
             <el-button type="primary" link size="small" @click="openDetailDialog(row)">查看</el-button>
             <el-button v-if="row.status === 'PENDING'" type="success" link size="small" @click="handleApprove(row)">审批</el-button>
-            <el-button v-if="row.status === 'PENDING'" type="danger" link size="small" @click="handleReject(row)">驳回</el-button>
+            <el-button v-if="row.status === 'PENDING'" type="danger" link size="small" @click="openRejectDialog(row)">驳回</el-button>
             <el-button v-if="row.status === 'APPROVED'" type="primary" link size="small" @click="handleShip(row)">发货</el-button>
             <el-button v-if="row.status === 'SHIPPING'" type="success" link size="small" @click="handleComplete(row)">完成</el-button>
           </template>
@@ -171,10 +179,32 @@
       </div>
       <template #footer>
         <el-button @click="approveVisible = false">取消</el-button>
-        <el-button type="danger" link @click="doReject">驳回</el-button>
+        <el-button type="danger" @click="switchToReject">填写驳回理由</el-button>
         <el-button type="primary" :disabled="approveInsufficient" :loading="approveLoading" @click="doApprove">
           同意审批
         </el-button>
+      </template>
+    </el-dialog>
+
+    <el-dialog v-model="rejectDialogVisible" title="驳回调拨单" width="520px" destroy-on-close>
+      <el-form :model="rejectForm" :rules="rejectRules" ref="rejectFormRef" label-width="90px">
+        <el-form-item label="调拨编号">
+          <span class="plain-text">{{ rejectForm.transferNo }}</span>
+        </el-form-item>
+        <el-form-item label="驳回理由" prop="rejectReason">
+          <el-input
+            v-model="rejectForm.rejectReason"
+            type="textarea"
+            :rows="4"
+            maxlength="500"
+            show-word-limit
+            placeholder="请详细说明驳回原因，以便发起人了解并修改"
+          />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="rejectDialogVisible = false">取消</el-button>
+        <el-button type="danger" :loading="rejectLoading" @click="doReject">确认驳回</el-button>
       </template>
     </el-dialog>
 
@@ -190,6 +220,9 @@
         <el-descriptions-item label="调入机构">{{ detail.toHospitalName }}</el-descriptions-item>
         <el-descriptions-item label="创建时间">{{ detail.createdAt }}</el-descriptions-item>
         <el-descriptions-item label="备注">{{ detail.remark || '-' }}</el-descriptions-item>
+        <el-descriptions-item v-if="detail.status === 'REJECTED'" label="驳回理由" :span="2">
+          <span class="reject-reason-display">{{ detail.rejectReason || '（未填写理由）' }}</span>
+        </el-descriptions-item>
       </el-descriptions>
 
       <el-table :data="detail.items || []" border size="small" style="margin-top: 16px">
@@ -247,7 +280,7 @@ const createRules = {
 const detailVisible = ref(false)
 const detail = reactive({
   transferNo: '', fromHospitalName: '', toHospitalName: '', status: '',
-  createdAt: '', remark: '', items: []
+  createdAt: '', remark: '', rejectReason: '', items: []
 })
 
 const itemStockCache = reactive({})
@@ -393,6 +426,8 @@ async function handleCreate() {
     ElMessage.success('调拨单创建成功')
     createVisible.value = false
     fetchData()
+  } catch (e) {
+    ElMessage.error(e?.response?.data?.message || '创建失败')
   } finally {
     submitLoading.value = false
   }
@@ -401,7 +436,11 @@ async function handleCreate() {
 async function openDetailDialog(row) {
   try {
     const res = await getTransfer(row.id)
-    Object.assign(detail, res.data)
+    Object.assign(detail, {
+      transferNo: '', fromHospitalName: '', toHospitalName: '', status: '',
+      createdAt: '', remark: '', rejectReason: '', items: [],
+      ...res.data
+    })
     detailVisible.value = true
   } catch {
     /* handled */
@@ -415,12 +454,6 @@ const approveInsufficient = ref(false)
 const approveLoading = ref(false)
 
 async function handleApprove(row) {
-  approveTransferRow.value = row
-  approveVisible.value = true
-  await loadApproveStock(row)
-}
-
-async function handleReject(row) {
   approveTransferRow.value = row
   approveVisible.value = true
   await loadApproveStock(row)
@@ -471,14 +504,45 @@ async function doApprove() {
   }
 }
 
+const rejectDialogVisible = ref(false)
+const rejectLoading = ref(false)
+const rejectFormRef = ref(null)
+const rejectForm = reactive({
+  id: null,
+  transferNo: '',
+  rejectReason: ''
+})
+const rejectRules = {
+  rejectReason: [{ required: true, message: '请填写驳回理由', trigger: 'blur' }]
+}
+
+function openRejectDialog(row) {
+  rejectForm.id = row.id
+  rejectForm.transferNo = row.transferNo
+  rejectForm.rejectReason = ''
+  rejectDialogVisible.value = true
+}
+
+function switchToReject() {
+  approveVisible.value = false
+  if (approveTransferRow.value) {
+    openRejectDialog(approveTransferRow.value)
+  }
+}
+
 async function doReject() {
+  const valid = await rejectFormRef.value.validate().catch(() => false)
+  if (!valid) return
+  rejectLoading.value = true
   try {
-    await rejectTransfer(approveTransferRow.value.id)
+    await rejectTransfer(rejectForm.id, rejectForm.rejectReason)
     ElMessage.success('已驳回')
-    approveVisible.value = false
+    rejectDialogVisible.value = false
     fetchData()
   } catch (e) {
     ElMessage.error(e?.response?.data?.message || '驳回失败')
+  } finally {
+    rejectLoading.value = false
   }
 }
 
@@ -531,5 +595,21 @@ async function handleComplete(row) {
   font-weight: 600;
   margin-bottom: 8px;
   color: #333;
+}
+
+.reject-reason-cell {
+  color: #F5222D;
+  font-size: 13px;
+}
+
+.reject-reason-display {
+  color: #F5222D;
+  font-weight: 500;
+  line-height: 1.6;
+}
+
+.plain-text {
+  color: #333;
+  font-weight: 500;
 }
 </style>

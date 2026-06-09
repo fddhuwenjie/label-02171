@@ -41,6 +41,10 @@
           <el-icon><Switch /></el-icon>
           <span>药品调拨</span>
         </el-menu-item>
+        <el-menu-item index="/expiry-alert">
+          <el-icon><AlarmClock /></el-icon>
+          <span>效期预警</span>
+        </el-menu-item>
         <el-menu-item index="/log">
           <el-icon><Document /></el-icon>
           <span>库存日志</span>

@@ -6,6 +6,7 @@ import com.medcommunity.entity.DrugInfo;
 import com.medcommunity.entity.DrugTransfer;
 import com.medcommunity.entity.Hospital;
 import com.medcommunity.entity.PurchaseOrder;
+import com.medcommunity.mapper.DrugExpiryAlertMapper;
 import com.medcommunity.mapper.DrugInfoMapper;
 import com.medcommunity.mapper.DrugInventoryMapper;
 import com.medcommunity.mapper.DrugTransferMapper;
@@ -35,6 +36,12 @@ public class DashboardServiceImpl implements DashboardService {
     @Autowired
     private PurchaseOrderMapper purchaseOrderMapper;
 
+    @Autowired
+    private DrugExpiryAlertMapper drugExpiryAlertMapper;
+
+    /**
+     * 获取首页统计数据，包含药品总数、机构总数、库存预警数、待审批调拨、待审批采购、效期预警数
+     */
     @Override
     public DashboardStats getStats() {
         long drugCount = drugInfoMapper.selectCount(
@@ -50,7 +57,8 @@ public class DashboardServiceImpl implements DashboardService {
         long pendingPurchaseCount = purchaseOrderMapper.selectCount(
                 new LambdaQueryWrapper<PurchaseOrder>().eq(PurchaseOrder::getStatus, "PENDING")
         );
+        long expiryAlertCount = drugExpiryAlertMapper.countActiveAlerts();
 
-        return new DashboardStats(drugCount, hospitalCount, lowStockCount, pendingTransferCount, pendingPurchaseCount);
+        return new DashboardStats(drugCount, hospitalCount, lowStockCount, pendingTransferCount, pendingPurchaseCount, expiryAlertCount);
     }
 }
